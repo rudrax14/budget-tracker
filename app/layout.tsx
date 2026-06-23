@@ -6,6 +6,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { PWARegister } from "@/components/pwa-register";
 import { ThemeProvider } from "@/components/theme-provider";
 
+// Pin server functions to Mumbai (bom1) so they sit next to the MongoDB Atlas
+// cluster (AWS ap-south-1 / Mumbai). On Vercel's default US-East region every
+// DB query crossed the globe (~250ms each) — co-locating cuts that to ~1ms.
+// All routes inherit this from the root layout unless they override it.
+export const preferredRegion = "bom1";
+
 const geistSans = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
   subsets: ["latin"],

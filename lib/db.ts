@@ -34,6 +34,9 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
   if (!cache.promise) {
     cache.promise = mongoose.connect(rawUri, {
       bufferCommands: false,
+      // Serverless-friendly: reuse a small pool, fail fast instead of hanging.
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 8000,
     });
   }
 
