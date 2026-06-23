@@ -8,6 +8,7 @@ import {
   type RawLabel,
 } from "@/lib/data/memory-store";
 import type { LabelDTO, NewLabelInput } from "@/lib/data/types";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 const FALLBACK_COLOR = "#22d3ee";
 
@@ -25,6 +26,7 @@ async function loadRawLabels(userId: string): Promise<RawLabel[]> {
 
 // Labels ordered most-frequently-used first (for the picker's "most frequent").
 export async function listLabels(userId: string): Promise<LabelDTO[]> {
+ return cachedRead(userId, "listLabels", async () => {
   const [labels, expenses] = await Promise.all([
     loadRawLabels(userId),
     loadRawExpenses(userId),
@@ -43,6 +45,7 @@ export async function listLabels(userId: string): Promise<LabelDTO[]> {
       count: counts.get(l.id) ?? 0,
     }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+ });
 }
 
 export async function createLabel(
@@ -55,6 +58,7 @@ export async function createLabel(
   }
   await connectToDatabase();
   const doc = await Label.create({ ...input, userId });
+  revalidateUser(userId);
   return {
     id: String(doc._id),
     name: doc.name,
@@ -70,4 +74,5 @@ export async function deleteLabel(userId: string, id: string): Promise<void> {
   }
   await connectToDatabase();
   await Label.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }

@@ -20,6 +20,7 @@ import type {
 } from "@/lib/data/types";
 import type { PaymentMethod } from "@/lib/constants";
 import { addInterval, startOfToday } from "@/lib/dates";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 interface LeanPlanned {
   _id: unknown;
@@ -88,10 +89,12 @@ async function categoryMap(userId: string): Promise<Map<string, CategoryDTO>> {
 }
 
 export async function listPlanned(userId: string): Promise<PlannedPaymentDTO[]> {
+ return cachedRead(userId, "listPlanned", async () => {
   const [raws, byId] = await Promise.all([loadRaw(userId), categoryMap(userId)]);
   return raws
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
     .map((r) => toDTO(r, byId));
+ });
 }
 
 export async function getPlannedById(
@@ -126,6 +129,7 @@ export async function createPlanned(
     const doc = await PlannedPayment.create({ userId, ...input });
     raw = leanToRaw(doc, userId);
   }
+  revalidateUser(userId);
   return toDTO(raw, await categoryMap(userId));
 }
 
@@ -147,6 +151,7 @@ export async function updatePlanned(
     raw = doc ? leanToRaw(doc, userId) : null;
   }
   if (!raw) return null;
+  revalidateUser(userId);
   return toDTO(raw, await categoryMap(userId));
 }
 
@@ -157,6 +162,7 @@ export async function deletePlanned(userId: string, id: string): Promise<void> {
   }
   await connectToDatabase();
   await PlannedPayment.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }
 
 async function setDueDate(userId: string, id: string, next: Date): Promise<void> {
@@ -167,6 +173,7 @@ async function setDueDate(userId: string, id: string, next: Date): Promise<void>
   }
   await connectToDatabase();
   await PlannedPayment.updateOne({ _id: id, userId }, { $set: { dueDate: next } });
+  revalidateUser(userId);
 }
 
 async function fallbackCategoryId(userId: string): Promise<string> {

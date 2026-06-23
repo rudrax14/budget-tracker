@@ -16,6 +16,7 @@ import type {
 } from "@/lib/data/types";
 import type { PaymentMethod } from "@/lib/constants";
 import { startOfMonth } from "@/lib/dates";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 interface LeanTransfer {
   _id: unknown;
@@ -69,10 +70,12 @@ export async function loadRawTransfers(userId: string): Promise<RawTransfer[]> {
 }
 
 export async function listTransfers(userId: string): Promise<TransferDTO[]> {
+ return cachedRead(userId, "listTransfers", async () => {
   const raws = await loadRaw(userId);
   return raws
     .sort((a, b) => b.transferDate.getTime() - a.transferDate.getTime())
     .map(toDTO);
+ });
 }
 
 export async function getTransferById(
@@ -106,6 +109,7 @@ export async function createTransfer(
     const doc = await Transfer.create({ userId, ...input });
     raw = leanToRaw(doc, userId);
   }
+  revalidateUser(userId);
   return toDTO(raw);
 }
 
@@ -126,6 +130,7 @@ export async function updateTransfer(
     ).lean();
     raw = doc ? leanToRaw(doc, userId) : null;
   }
+  revalidateUser(userId);
   return raw ? toDTO(raw) : null;
 }
 
@@ -136,6 +141,7 @@ export async function deleteTransfer(userId: string, id: string): Promise<void> 
   }
   await connectToDatabase();
   await Transfer.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }
 
 function summarize(raws: RawTransfer[]): TransferSummary {
@@ -152,14 +158,18 @@ function summarize(raws: RawTransfer[]): TransferSummary {
 export async function getTransferTotals(
   userId: string,
 ): Promise<TransferSummary> {
-  return summarize(await loadRaw(userId));
+  return cachedRead(userId, "getTransferTotals", async () =>
+    summarize(await loadRaw(userId)),
+  );
 }
 
 // This-month totals (used on the dashboard card).
 export async function getMonthlyTransferSummary(
   userId: string,
 ): Promise<TransferSummary> {
+ return cachedRead(userId, "getMonthlyTransferSummary", async () => {
   const raws = await loadRaw(userId);
   const monthStart = startOfMonth();
   return summarize(raws.filter((t) => t.transferDate >= monthStart));
+ });
 }

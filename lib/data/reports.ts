@@ -3,6 +3,7 @@ import { loadRawTransfers } from "@/lib/data/transfers";
 import { listCategories } from "@/lib/data/categories";
 import { listPlanned } from "@/lib/data/planned";
 import { getTotalBalance } from "@/lib/data/accounts";
+import { cachedRead } from "@/lib/data/cache";
 import { addInterval, currentMonthKey, startOfToday, startOfWeek } from "@/lib/dates";
 import type {
   BalanceTrend,
@@ -50,6 +51,7 @@ export async function getCategoryBreakdown(
   userId: string,
   month: string = currentMonthKey(),
 ): Promise<CategoryBreakdownItem[]> {
+ return cachedRead(userId, `getCategoryBreakdown:${month}`, async () => {
   const [raws, categories] = await Promise.all([
     loadRawExpenses(userId),
     listCategories(userId),
@@ -73,12 +75,14 @@ export async function getCategoryBreakdown(
       };
     })
     .sort((a, b) => b.total - a.total);
+ });
 }
 
 export async function getMonthlyTotals(
   userId: string,
   monthsBack = 6,
 ): Promise<MonthlyTotalItem[]> {
+ return cachedRead(userId, `getMonthlyTotals:${monthsBack}`, async () => {
   const raws = await loadRawExpenses(userId);
   const now = new Date();
 
@@ -96,12 +100,14 @@ export async function getMonthlyTotals(
     if (idx !== undefined) buckets[idx].total += r.amount;
   }
   return buckets;
+ });
 }
 
 export async function getDailyTrend(
   userId: string,
   days = 30,
 ): Promise<DailyTrendItem[]> {
+ return cachedRead(userId, `getDailyTrend:${days}`, async () => {
   const raws = await loadRawExpenses(userId);
   const today = startOfToday();
 
@@ -119,12 +125,14 @@ export async function getDailyTrend(
     if (idx !== undefined) buckets[idx].total += r.amount;
   }
   return buckets;
+ });
 }
 
 export async function getYearReview(
   userId: string,
   year: number,
 ): Promise<YearReview> {
+ return cachedRead(userId, `getYearReview:${year}`, async () => {
   const [raws, categories] = await Promise.all([
     loadRawExpenses(userId),
     listCategories(userId),
@@ -191,12 +199,14 @@ export async function getYearReview(
     topWeekdayLabel,
     busiestMonthLabel,
   };
+ });
 }
 
 export async function getSpendingHeatmap(
   userId: string,
   weeks = 16,
 ): Promise<SpendingHeatmap> {
+ return cachedRead(userId, `getSpendingHeatmap:${weeks}`, async () => {
   const raws = await loadRawExpenses(userId);
   const totals = new Map<string, number>();
   for (const r of raws) {
@@ -229,12 +239,14 @@ export async function getSpendingHeatmap(
   }
 
   return { weeks, max, columns };
+ });
 }
 
 export async function getCashflowForecast(
   userId: string,
   days = 30,
 ): Promise<CashflowForecast> {
+ return cachedRead(userId, `getCashflowForecast:${days}`, async () => {
   const planned = await listPlanned(userId);
   const today = startOfToday();
   const end = new Date(today);
@@ -297,6 +309,7 @@ export async function getCashflowForecast(
   );
 
   return { points, totalIn, totalOut, net: totalIn - totalOut, occurrences };
+ });
 }
 
 // Running total balance over the last `days`, derived by walking backwards
@@ -306,6 +319,7 @@ export async function getBalanceTrend(
   days = 30,
   currentBalance?: number,
 ): Promise<BalanceTrend> {
+ return cachedRead(userId, `getBalanceTrend:${days}:${currentBalance ?? ""}`, async () => {
   const [current, expenses, transfers] = await Promise.all([
     currentBalance !== undefined
       ? Promise.resolve(currentBalance)
@@ -346,12 +360,14 @@ export async function getBalanceTrend(
     startBal !== 0 ? ((current - startBal) / Math.abs(startBal)) * 100 : null;
 
   return { points, current: Math.round(current), changePct };
+ });
 }
 
 // This-week category structure with a vs-last-week comparison.
 export async function getExpenseStructure(
   userId: string,
 ): Promise<ExpenseStructure> {
+ return cachedRead(userId, "getExpenseStructure", async () => {
   const [raws, categories] = await Promise.all([
     loadRawExpenses(userId),
     listCategories(userId),
@@ -391,4 +407,5 @@ export async function getExpenseStructure(
     prevTotal !== 0 ? ((total - prevTotal) / prevTotal) * 100 : null;
 
   return { total, slices, changePct };
+ });
 }

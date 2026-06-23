@@ -19,6 +19,7 @@ import type {
 } from "@/lib/data/types";
 import { startOfMonth, startOfToday, startOfWeek } from "@/lib/dates";
 import type { PaymentMethod } from "@/lib/constants";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 interface LeanExpense {
   _id: unknown;
@@ -102,6 +103,7 @@ export async function createExpense(
     raw = leanToRaw(doc, userId);
   }
 
+  revalidateUser(userId);
   return toDTO(raw, await categoryMap(userId));
 }
 
@@ -147,6 +149,7 @@ export async function updateExpense(
   }
 
   if (!raw) return null;
+  revalidateUser(userId);
   return toDTO(raw, await categoryMap(userId));
 }
 
@@ -157,12 +160,14 @@ export async function deleteExpense(userId: string, id: string): Promise<void> {
   }
   await connectToDatabase();
   await Expense.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }
 
 export async function listExpenses(
   userId: string,
   filters: ExpenseFilters = {},
 ): Promise<ExpenseDTO[]> {
+ return cachedRead(userId, `listExpenses:${JSON.stringify(filters)}`, async () => {
   const [raws, categories] = await Promise.all([
     loadRawExpenses(userId),
     listCategories(userId),
@@ -194,6 +199,7 @@ export async function listExpenses(
   return result
     .sort((a, b) => b.expenseDate.getTime() - a.expenseDate.getTime())
     .map((r) => toDTO(r, categoryById));
+ });
 }
 
 // Distinct recent labels (newest first) for the add-form autocomplete.
@@ -201,6 +207,7 @@ export async function getRecentLabels(
   userId: string,
   limit = 25,
 ): Promise<string[]> {
+ return cachedRead(userId, `getRecentLabels:${limit}`, async () => {
   const raws = await loadRawExpenses(userId);
   const seen = new Set<string>();
   const labels: string[] = [];
@@ -214,9 +221,11 @@ export async function getRecentLabels(
     }
   }
   return labels;
+ });
 }
 
 export async function getDashboardStats(userId: string): Promise<DashboardStats> {
+ return cachedRead(userId, "getDashboardStats", async () => {
   const [raws, categories, monthlyBudget] = await Promise.all([
     loadRawExpenses(userId),
     listCategories(userId),
@@ -251,4 +260,5 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     remainingBudget: monthlyBudget === null ? null : monthlyBudget - monthSpend,
     recentExpenses,
   };
+ });
 }

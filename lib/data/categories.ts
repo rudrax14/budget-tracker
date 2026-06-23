@@ -8,6 +8,7 @@ import {
   memUpdateCategory,
 } from "@/lib/data/memory-store";
 import type { CategoryDTO } from "@/lib/data/types";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 export interface CategoryInput {
   name: string;
@@ -35,6 +36,7 @@ export class DuplicateCategoryError extends Error {
 }
 
 export async function listCategories(userId: string): Promise<CategoryDTO[]> {
+ return cachedRead(userId, "listCategories", async () => {
   if (!isDbConfigured) {
     return memGetCategories(userId);
   }
@@ -66,6 +68,7 @@ export async function listCategories(userId: string): Promise<CategoryDTO[]> {
     color: d.color ?? undefined,
     isDefault: Boolean(d.isDefault),
   }));
+ });
 }
 
 export async function createCategory(
@@ -84,6 +87,7 @@ export async function createCategory(
     if (isDuplicateKeyError(err)) throw new DuplicateCategoryError();
     throw err;
   }
+  revalidateUser(userId);
   return {
     id: String(doc._id),
     name: doc.name,
@@ -110,6 +114,7 @@ export async function updateCategory(
     if (isDuplicateKeyError(err)) throw new DuplicateCategoryError();
     throw err;
   }
+  revalidateUser(userId);
 }
 
 export async function deleteCategory(userId: string, id: string): Promise<void> {
@@ -120,4 +125,5 @@ export async function deleteCategory(userId: string, id: string): Promise<void> 
 
   await connectToDatabase();
   await Category.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }

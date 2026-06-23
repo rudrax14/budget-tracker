@@ -11,6 +11,7 @@ import {
   type RawAccount,
 } from "@/lib/data/memory-store";
 import type { AccountDTO, AccountType, NewAccountInput } from "@/lib/data/types";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 async function loadRawAccounts(userId: string): Promise<RawAccount[]> {
   if (!isDbConfigured) return memGetAccounts(userId);
@@ -37,6 +38,7 @@ async function loadRawAccounts(userId: string): Promise<RawAccount[]> {
 //   balance = opening + transfers in − transfers out − expenses
 // Records with no/deleted account fall back to the first account.
 export async function listAccounts(userId: string): Promise<AccountDTO[]> {
+ return cachedRead(userId, "listAccounts", async () => {
   const [rawAll, expenses, transfers] = await Promise.all([
     loadRawAccounts(userId),
     loadRawExpenses(userId),
@@ -75,6 +77,7 @@ export async function listAccounts(userId: string): Promise<AccountDTO[]> {
     openingBalance: a.openingBalance,
     balance: balances.get(a.id) ?? a.openingBalance,
   }));
+ });
 }
 
 export async function getTotalBalance(userId: string): Promise<number> {
@@ -92,6 +95,7 @@ export async function createAccount(
   }
   await connectToDatabase();
   await Account.create({ ...input, userId });
+  revalidateUser(userId);
 }
 
 export async function updateAccount(
@@ -105,6 +109,7 @@ export async function updateAccount(
   }
   await connectToDatabase();
   await Account.findOneAndUpdate({ _id: id, userId }, { $set: { ...input } });
+  revalidateUser(userId);
 }
 
 export async function deleteAccount(userId: string, id: string): Promise<void> {
@@ -114,4 +119,5 @@ export async function deleteAccount(userId: string, id: string): Promise<void> {
   }
   await connectToDatabase();
   await Account.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }

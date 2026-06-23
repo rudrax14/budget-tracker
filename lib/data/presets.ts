@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/memory-store";
 import type { CategoryDTO, NewPresetInput, PresetDTO } from "@/lib/data/types";
 import type { PaymentMethod } from "@/lib/constants";
+import { cachedRead, revalidateUser } from "@/lib/data/cache";
 
 interface RawPresetLike {
   id: string;
@@ -33,6 +34,7 @@ function toDTO(raw: RawPresetLike, byId: Map<string, CategoryDTO>): PresetDTO {
 }
 
 export async function listPresets(userId: string): Promise<PresetDTO[]> {
+ return cachedRead(userId, "listPresets", async () => {
   const cats = await listCategories(userId);
   const byId = new Map(cats.map((c) => [c.id, c]));
 
@@ -55,6 +57,7 @@ export async function listPresets(userId: string): Promise<PresetDTO[]> {
       byId,
     ),
   );
+ });
 }
 
 export async function createPreset(
@@ -67,6 +70,7 @@ export async function createPreset(
   }
   await connectToDatabase();
   await Preset.create({ userId, ...input });
+  revalidateUser(userId);
 }
 
 export async function deletePreset(userId: string, id: string): Promise<void> {
@@ -76,6 +80,7 @@ export async function deletePreset(userId: string, id: string): Promise<void> {
   }
   await connectToDatabase();
   await Preset.deleteOne({ _id: id, userId });
+  revalidateUser(userId);
 }
 
 // One-tap: turns a preset into a real expense dated today.
