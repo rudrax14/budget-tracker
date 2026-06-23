@@ -9,6 +9,7 @@ import {
   getExpenseById,
   updateExpense,
 } from "@/lib/data/expenses";
+import { listCategories } from "@/lib/data/categories";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/constants";
 import type { NewExpenseInput } from "@/lib/data/types";
 
@@ -34,8 +35,9 @@ function parseExpenseForm(formData: FormData): ParseResult {
   const note = String(formData.get("note") ?? "").trim();
 
   if (!amount || amount <= 0) return { ok: false, error: "Enter a valid amount." };
+  // Category is the required field. The title is optional — when left blank it
+  // falls back to the category name (see resolveLabel).
   if (!categoryId) return { ok: false, error: "Pick a category." };
-  if (!label) return { ok: false, error: "Add a short label." };
   if (!PAYMENT_METHODS.includes(paymentMethod))
     return { ok: false, error: "Pick a payment method." };
   if (!dateStr) return { ok: false, error: "Pick a date." };
@@ -59,6 +61,18 @@ function parseExpenseForm(formData: FormData): ParseResult {
   };
 }
 
+// Title is optional; when it's blank, use the chosen category's name as the
+// display title so records/lists never render an empty label.
+async function resolveLabel(
+  userId: string,
+  value: NewExpenseInput,
+): Promise<NewExpenseInput> {
+  if (value.label) return value;
+  const categories = await listCategories(userId);
+  const category = categories.find((c) => c.id === value.categoryId);
+  return { ...value, label: category?.name ?? "Expense" };
+}
+
 export async function addExpenseAction(
   _prev: ExpenseFormState,
   formData: FormData,
@@ -67,7 +81,7 @@ export async function addExpenseAction(
   if (!parsed.ok) return { error: parsed.error };
 
   const userId = await getCurrentUserId();
-  await createExpense(userId, parsed.value);
+  await createExpense(userId, await resolveLabel(userId, parsed.value));
 
   revalidatePath("/");
   revalidatePath("/expenses");
@@ -85,7 +99,11 @@ export async function updateExpenseAction(
   if (!parsed.ok) return { error: parsed.error };
 
   const userId = await getCurrentUserId();
-  const updated = await updateExpense(userId, id, parsed.value);
+  const updated = await updateExpense(
+    userId,
+    id,
+    await resolveLabel(userId, parsed.value),
+  );
   if (!updated) return { error: "Expense not found." };
 
   revalidatePath("/");

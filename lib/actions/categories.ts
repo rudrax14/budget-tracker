@@ -5,6 +5,7 @@ import { getCurrentUserId } from "@/lib/session";
 import {
   createCategory,
   deleteCategory,
+  DuplicateCategoryError,
   updateCategory,
 } from "@/lib/data/categories";
 
@@ -28,7 +29,12 @@ export async function createCategoryAction(
   if (!input.name) return { error: "Category name is required." };
 
   const userId = await getCurrentUserId();
-  await createCategory(userId, input);
+  try {
+    await createCategory(userId, input);
+  } catch (err) {
+    if (err instanceof DuplicateCategoryError) return { error: err.message };
+    throw err;
+  }
 
   revalidatePath("/settings");
   revalidatePath("/expense/new");
@@ -45,7 +51,12 @@ export async function updateCategoryAction(
   if (!input.name) return { error: "Category name is required." };
 
   const userId = await getCurrentUserId();
-  await updateCategory(userId, id, input);
+  try {
+    await updateCategory(userId, id, input);
+  } catch (err) {
+    if (err instanceof DuplicateCategoryError) return { error: err.message };
+    throw err;
+  }
 
   revalidatePath("/settings");
   revalidatePath("/expenses");

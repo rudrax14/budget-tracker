@@ -90,7 +90,9 @@ export function ExpenseForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="categoryId">Category</Label>
+        <Label htmlFor="categoryId">
+          Category <span className="text-destructive">*</span>
+        </Label>
         <Select
           name="categoryId"
           defaultValue={expense?.categoryId ?? categories[0]?.id}
@@ -129,15 +131,14 @@ export function ExpenseForm({
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="label">Title</Label>
+        <Label htmlFor="label">Title (optional)</Label>
         <Input
           id="label"
           name="label"
-          placeholder="e.g. Lunch, Uber, Groceries"
+          placeholder="Defaults to the category name"
           defaultValue={expense?.label}
           list="expense-labels"
           autoComplete="off"
-          required
           className="h-12"
         />
         {labelSuggestions.length > 0 ? (

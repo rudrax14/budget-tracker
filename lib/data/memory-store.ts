@@ -17,6 +17,15 @@ import type {
   NewTransferInput,
 } from "@/lib/data/types";
 
+export interface RawUser {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  currency: string;
+  createdAt: Date;
+}
+
 export type RawPlanned = NewPlannedInput & { id: string; userId: string };
 export type RawPreset = NewPresetInput & { id: string; userId: string };
 export type RawTransfer = NewTransferInput & { id: string; userId: string };
@@ -45,6 +54,7 @@ export interface RawBudget {
 }
 
 interface Store {
+  users: Map<string, RawUser>; // keyed by user id
   categories: Map<string, CategoryDTO[]>;
   expenses: Map<string, RawExpense[]>;
   budgets: Map<string, RawBudget[]>;
@@ -59,6 +69,7 @@ interface Store {
 const globalForStore = globalThis as unknown as { _memoryStore?: Store };
 
 const store: Store = globalForStore._memoryStore ?? {
+  users: new Map(),
   categories: new Map(),
   expenses: new Map(),
   budgets: new Map(),
@@ -125,6 +136,38 @@ function ensureSeeded(userId: string): void {
       openingBalance: 0,
     })),
   );
+}
+
+/* -------------------------------- users ------------------------------- */
+
+export function memGetUserByEmail(email: string): RawUser | null {
+  const target = email.trim().toLowerCase();
+  for (const user of store.users.values()) {
+    if (user.email === target) return user;
+  }
+  return null;
+}
+
+export function memGetUserById(id: string): RawUser | null {
+  return store.users.get(id) ?? null;
+}
+
+export function memCreateUser(input: {
+  name: string;
+  email: string;
+  passwordHash: string;
+  currency?: string;
+}): RawUser {
+  const user: RawUser = {
+    id: crypto.randomUUID(),
+    name: input.name,
+    email: input.email.trim().toLowerCase(),
+    passwordHash: input.passwordHash,
+    currency: input.currency ?? "INR",
+    createdAt: new Date(),
+  };
+  store.users.set(user.id, user);
+  return user;
 }
 
 /* ----------------------------- categories ----------------------------- */

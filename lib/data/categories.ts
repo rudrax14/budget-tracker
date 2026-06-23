@@ -15,6 +15,25 @@ export interface CategoryInput {
   color?: string;
 }
 
+// MongoDB duplicate-key error code. Raised when an insert/update would violate
+// the unique (userId, name) index. insertMany({ ordered: false }) wraps these
+// in a bulk-write error whose writeErrors all carry the same code.
+function isDuplicateKeyError(err: unknown): boolean {
+  const e = err as { code?: number; writeErrors?: { code?: number }[] };
+  if (e?.code === 11000) return true;
+  return Boolean(e?.writeErrors?.length) &&
+    e.writeErrors!.every((w) => w.code === 11000);
+}
+
+// Thrown when the caller tries to create/rename a category to a name the user
+// already has. Action handlers turn this into a friendly form error.
+export class DuplicateCategoryError extends Error {
+  constructor() {
+    super("You already have a category with that name.");
+    this.name = "DuplicateCategoryError";
+  }
+}
+
 export async function listCategories(userId: string): Promise<CategoryDTO[]> {
   if (!isDbConfigured) {
     return memGetCategories(userId);
@@ -24,11 +43,19 @@ export async function listCategories(userId: string): Promise<CategoryDTO[]> {
 
   let docs = await Category.find({ userId }).sort({ name: 1 }).lean();
 
-  // Seed the default categories the first time a user is seen.
+  // Seed the default categories the first time a user is seen. Several server
+  // components fetch categories in parallel on first load, so this can run
+  // concurrently — the unique (userId, name) index + ordered:false insert make
+  // it idempotent: duplicate inserts fail with E11000 and are ignored.
   if (docs.length === 0) {
-    await Category.insertMany(
-      DEFAULT_CATEGORIES.map((c) => ({ ...c, userId, isDefault: true })),
-    );
+    try {
+      await Category.insertMany(
+        DEFAULT_CATEGORIES.map((c) => ({ ...c, userId, isDefault: true })),
+        { ordered: false },
+      );
+    } catch (err) {
+      if (!isDuplicateKeyError(err)) throw err;
+    }
     docs = await Category.find({ userId }).sort({ name: 1 }).lean();
   }
 
@@ -50,7 +77,13 @@ export async function createCategory(
   }
 
   await connectToDatabase();
-  const doc = await Category.create({ ...input, userId, isDefault: false });
+  let doc;
+  try {
+    doc = await Category.create({ ...input, userId, isDefault: false });
+  } catch (err) {
+    if (isDuplicateKeyError(err)) throw new DuplicateCategoryError();
+    throw err;
+  }
   return {
     id: String(doc._id),
     name: doc.name,
@@ -71,7 +104,12 @@ export async function updateCategory(
   }
 
   await connectToDatabase();
-  await Category.findOneAndUpdate({ _id: id, userId }, { $set: { ...patch } });
+  try {
+    await Category.findOneAndUpdate({ _id: id, userId }, { $set: { ...patch } });
+  } catch (err) {
+    if (isDuplicateKeyError(err)) throw new DuplicateCategoryError();
+    throw err;
+  }
 }
 
 export async function deleteCategory(userId: string, id: string): Promise<void> {

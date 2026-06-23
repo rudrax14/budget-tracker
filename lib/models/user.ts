@@ -4,6 +4,8 @@ const userSchema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, index: true },
+    // scrypt password hash in the form `salt:derivedKey` (both hex).
+    passwordHash: { type: String, required: true },
     image: { type: String },
     currency: { type: String, default: "INR" },
   },

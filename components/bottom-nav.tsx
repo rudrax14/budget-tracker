@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Home, Plus, Receipt, Settings } from "lucide-react";
+import { BarChart3, Home, IndianRupee, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/expenses", label: "Expenses", icon: Receipt },
+  { href: "/expenses", label: "Expenses", icon: IndianRupee },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -19,12 +19,15 @@ function isActive(pathname: string, href: string): boolean {
 export function BottomNav() {
   const pathname = usePathname();
 
-  // Hide the bottom bar on the full-screen add/edit forms and label screen.
+  // Hide the bottom bar on the full-screen add/edit forms, label screen, and
+  // the auth pages.
   if (
     pathname.startsWith("/expense/") ||
     pathname.startsWith("/planned/") ||
     pathname.startsWith("/transfers/") ||
-    pathname.startsWith("/labels")
+    pathname.startsWith("/labels") ||
+    pathname === "/login" ||
+    pathname === "/register"
   )
     return null;
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Bell,
   CalendarClock,
   LineChart,
@@ -7,7 +9,7 @@ import {
   Plus,
   Settings as SettingsIcon,
 } from "lucide-react";
-import { getCurrentUserId } from "@/lib/session";
+import { getCurrentUser, getCurrentUserId } from "@/lib/session";
 import { listAccounts } from "@/lib/data/accounts";
 import { getDashboardStats, listExpenses } from "@/lib/data/expenses";
 import {
@@ -16,6 +18,7 @@ import {
   getExpenseStructure,
 } from "@/lib/data/reports";
 import { getUpcoming } from "@/lib/data/planned";
+import { getMonthlyTransferSummary } from "@/lib/data/transfers";
 import { listLabels } from "@/lib/data/labels";
 import { formatINR } from "@/lib/constants";
 import {
@@ -92,12 +95,13 @@ export default async function HomePage({
   }
 
   const userId = await getCurrentUserId();
+  const user = await getCurrentUser();
   // Fetch accounts first (seeds defaults exactly once, avoiding a race), then
   // fan out the rest — the balance trend reuses the total we already have.
   const accounts = await listAccounts(userId);
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
 
-  const [stats, trend, structure, upcoming, breakdown, recordList, labels] =
+  const [stats, trend, structure, upcoming, breakdown, recordList, labels, transfers] =
     await Promise.all([
       getDashboardStats(userId),
       getBalanceTrend(userId, 30, totalBalance),
@@ -106,11 +110,17 @@ export default async function HomePage({
       getCategoryBreakdown(userId),
       listExpenses(userId, { from: recordsFrom, to: recordsTo }),
       listLabels(userId),
+      getMonthlyTransferSummary(userId),
     ]);
 
   const records = recordList.slice(0, 15);
   const labelById = new Map(labels.map((l) => [l.id, l]));
   const accountName = new Map(accounts.map((a) => [a.id, a.name]));
+
+  // This-month cash flow: money in (transfers received) vs money out
+  // (expenses spent + transfers sent).
+  const income = transfers.received;
+  const outcome = stats.monthSpend + transfers.sent;
 
   const chip =
     "flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium";
@@ -152,6 +162,26 @@ export default async function HomePage({
           </Link>
         </div>
       </section>
+
+      {/* This month — income vs outcome */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-emerald-500/10 px-4 py-3">
+          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+            <ArrowDownLeft className="size-4" />
+            <span className="text-xs font-medium">Income</span>
+          </div>
+          <p className="mt-1 text-xl font-bold">{formatINR(income)}</p>
+          <p className="text-muted-foreground text-[11px]">received this month</p>
+        </div>
+        <div className="rounded-xl bg-rose-500/10 px-4 py-3">
+          <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+            <ArrowUpRight className="size-4" />
+            <span className="text-xs font-medium">Outcome</span>
+          </div>
+          <p className="mt-1 text-xl font-bold">{formatINR(outcome)}</p>
+          <p className="text-muted-foreground text-[11px]">spent &amp; sent this month</p>
+        </div>
+      </div>
 
       {/* Quick chips */}
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
@@ -403,7 +433,7 @@ export default async function HomePage({
   return (
     <div className="mx-auto max-w-md px-4 py-4">
       <header className="mb-3 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Home</h1>
+        <h1 className="truncate text-2xl font-bold">{user.name}</h1>
         <Link
           href="/planned"
           aria-label="Upcoming"

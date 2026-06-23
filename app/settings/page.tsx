@@ -2,16 +2,16 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { listCategories } from "@/lib/data/categories";
 import { getOverallMonthlyBudget } from "@/lib/data/budget";
-import { listPresets } from "@/lib/data/presets";
 import { listAccounts } from "@/lib/data/accounts";
 import { listLabels } from "@/lib/data/labels";
-import { getCurrentUserId } from "@/lib/session";
+import { getCurrentUser, getCurrentUserId } from "@/lib/session";
+import { logoutAction } from "@/lib/actions/auth";
 import { currentMonthKey } from "@/lib/dates";
 import { isDbConfigured } from "@/lib/db";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BudgetForm } from "@/components/settings/budget-form";
 import { CategoryManager } from "@/components/settings/category-manager";
-import { PresetManager } from "@/components/settings/preset-manager";
 import { AccountManager } from "@/components/settings/account-manager";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { DataIO } from "@/components/settings/data-io";
@@ -26,10 +26,10 @@ const monthLabel = new Intl.DateTimeFormat("en-IN", {
 
 export default async function SettingsPage() {
   const userId = await getCurrentUserId();
-  const [categories, budget, presets, accounts, labels] = await Promise.all([
+  const user = await getCurrentUser();
+  const [categories, budget, accounts, labels] = await Promise.all([
     listCategories(userId),
     getOverallMonthlyBudget(userId),
-    listPresets(userId),
     listAccounts(userId),
     listLabels(userId),
   ]);
@@ -87,22 +87,29 @@ export default async function SettingsPage() {
 
       <section>
         <div className="mb-2">
-          <h2 className="font-semibold">Quick-add presets</h2>
-          <p className="text-muted-foreground text-xs">
-            One-tap tiles on your dashboard.
-          </p>
-        </div>
-        <PresetManager presets={presets} categories={categories} />
-      </section>
-
-      <section>
-        <div className="mb-2">
           <h2 className="font-semibold">Data (Excel / CSV)</h2>
           <p className="text-muted-foreground text-xs">
             Export everything, or import expenses from a spreadsheet.
           </p>
         </div>
         <DataIO />
+      </section>
+
+      <section>
+        <h2 className="mb-2 font-semibold">Account</h2>
+        <Card>
+          <CardContent className="space-y-3 px-4 py-4">
+            <div>
+              <p className="font-medium">{user.name}</p>
+              <p className="text-muted-foreground text-sm">{user.email}</p>
+            </div>
+            <form action={logoutAction}>
+              <Button type="submit" variant="destructive" className="w-full">
+                Log out
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </section>
 
       <section>
@@ -117,10 +124,6 @@ export default async function SettingsPage() {
               <span className="text-foreground">
                 {isDbConfigured ? "MongoDB Atlas" : "In-memory (dev)"}
               </span>
-            </p>
-            <p>
-              Account:{" "}
-              <span className="text-foreground">Local user (no sign-in)</span>
             </p>
           </CardContent>
         </Card>
